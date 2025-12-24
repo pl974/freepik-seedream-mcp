@@ -73,15 +73,17 @@ const httpServer = createHttpServer(async (req: IncomingMessage, res: ServerResp
         let transport: StreamableHTTPServerTransport;
 
         if (isInitialize) {
-          // Parse config from query parameter
-          let config = { freepikApiKey: process.env.FREEPIK_API_KEY || '' };
+          // Use environment variable for API key (set in Smithery)
+          const apiKey = process.env.FREEPIK_API_KEY || '';
 
+          // Also check query parameter as fallback
+          let config = { freepikApiKey: apiKey };
           const configParam = url.searchParams.get('config');
           if (configParam) {
             try {
               const decoded = JSON.parse(Buffer.from(configParam, 'base64').toString('utf-8'));
               if (decoded.freepikApiKey) {
-                config = decoded;
+                config.freepikApiKey = decoded.freepikApiKey;
               }
             } catch (e) {
               console.error('Failed to parse config:', e);
@@ -89,17 +91,20 @@ const httpServer = createHttpServer(async (req: IncomingMessage, res: ServerResp
           }
 
           if (!config.freepikApiKey) {
+            console.error('No FREEPIK_API_KEY found in env or config');
             res.writeHead(400, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({
               jsonrpc: '2.0',
               id: message.id,
               error: {
                 code: -32602,
-                message: 'Missing freepikApiKey in config'
+                message: 'Missing FREEPIK_API_KEY environment variable'
               }
             }));
             return;
           }
+
+          console.log('Using API key:', config.freepikApiKey.substring(0, 8) + '...');
 
           // Create new transport and server
           transport = new StreamableHTTPServerTransport({
