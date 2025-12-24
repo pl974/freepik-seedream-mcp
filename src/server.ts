@@ -147,7 +147,7 @@ const httpServer = createHttpServer(async (req, res) => {
           try {
             console.log(`[seedream_generate] Starting with prompt: ${args.prompt}`);
             // Start generation
-            const response = await fetch('https://api.freepik.com/v1/ai/text-to-image/seedream-v4', {
+            const response = await fetch('https://api.freepik.com/v1/ai/text-to-image/seedream', {
               method: 'POST',
               headers: {
                 'x-freepik-api-key': apiKey,
@@ -184,7 +184,7 @@ const httpServer = createHttpServer(async (req, res) => {
             for (let i = 0; i < 45; i++) {
               await new Promise(r => setTimeout(r, 2000));
 
-              const statusRes = await fetch(`https://api.freepik.com/v1/ai/text-to-image/seedream-v4/${data.task_id}`, {
+              const statusRes = await fetch(`https://api.freepik.com/v1/ai/text-to-image/seedream/${data.task_id}`, {
                 headers: { 'x-freepik-api-key': apiKey }
               });
               const status = await statusRes.json();
