@@ -131,6 +131,7 @@ const httpServer = createHttpServer(async (req, res) => {
 
         if (toolName === 'seedream_generate') {
           try {
+            // Start generation
             const response = await fetch('https://api.freepik.com/v1/ai/text-to-image/seedream-v4', {
               method: 'POST',
               headers: {
@@ -145,14 +146,62 @@ const httpServer = createHttpServer(async (req, res) => {
 
             const data = await response.json();
 
-            res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({
-              jsonrpc: '2.0',
-              id: message.id,
-              result: {
-                content: [{ type: 'text', text: JSON.stringify(data, null, 2) }]
+            if (!data.task_id) {
+              res.writeHead(200, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({
+                jsonrpc: '2.0',
+                id: message.id,
+                result: {
+                  content: [{ type: 'text', text: `Error: ${JSON.stringify(data)}` }],
+                  isError: true
+                }
+              }));
+              return;
+            }
+
+            // Poll for completion
+            let result = null;
+            for (let i = 0; i < 60; i++) {
+              await new Promise(r => setTimeout(r, 2000));
+
+              const statusRes = await fetch(`https://api.freepik.com/v1/ai/text-to-image/seedream-v4/${data.task_id}`, {
+                headers: { 'x-freepik-api-key': apiKey }
+              });
+              const status = await statusRes.json();
+
+              if (status.status === 'COMPLETED' && status.generated?.length > 0) {
+                result = status;
+                break;
               }
-            }));
+              if (status.status === 'FAILED') {
+                throw new Error('Generation failed');
+              }
+            }
+
+            if (result && result.generated?.length > 0) {
+              const imageUrl = result.generated[0].url;
+              res.writeHead(200, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({
+                jsonrpc: '2.0',
+                id: message.id,
+                result: {
+                  content: [
+                    { type: 'text', text: `Image générée avec succès !\n\nURL: ${imageUrl}` },
+                    { type: 'image', data: imageUrl, mimeType: 'image/png' }
+                  ]
+                }
+              }));
+            } else {
+              res.writeHead(200, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({
+                jsonrpc: '2.0',
+                id: message.id,
+                result: {
+                  content: [{ type: 'text', text: 'Timeout: Image generation took too long' }],
+                  isError: true
+                }
+              }));
+            }
           } catch (error) {
             res.writeHead(200, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({
