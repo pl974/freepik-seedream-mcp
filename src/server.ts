@@ -22,15 +22,15 @@ const httpServer = createHttpServer(async (req, res) => {
 
   const url = new URL(req.url || '/', `http://localhost:${PORT}`);
 
-  // Health check
-  if (url.pathname === '/' || url.pathname === '/health') {
+  // Health check (GET only)
+  if ((url.pathname === '/' || url.pathname === '/health') && req.method === 'GET') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ status: 'ok', service: 'freepik-seedream-mcp' }));
     return;
   }
 
-  // MCP endpoint
-  if (url.pathname === '/mcp' && req.method === 'POST') {
+  // MCP endpoint - handle POST at root or /mcp
+  if ((url.pathname === '/' || url.pathname === '/mcp') && req.method === 'POST') {
     let body = '';
     for await (const chunk of req) {
       body += chunk;
