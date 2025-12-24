@@ -176,22 +176,30 @@ const httpServer = createHttpServer(async (req, res) => {
               return;
             }
 
-            // Poll for completion
+            // Poll for completion (max 90 seconds)
             let result = null;
-            for (let i = 0; i < 60; i++) {
+            let lastStatus = 'UNKNOWN';
+            console.log(`[seedream_generate] Starting polling for task ${data.task_id}`);
+
+            for (let i = 0; i < 45; i++) {
               await new Promise(r => setTimeout(r, 2000));
 
               const statusRes = await fetch(`https://api.freepik.com/v1/ai/text-to-image/seedream-v4/${data.task_id}`, {
                 headers: { 'x-freepik-api-key': apiKey }
               });
               const status = await statusRes.json();
+              lastStatus = status.status || 'UNKNOWN';
+
+              console.log(`[seedream_generate] Poll ${i+1}/45 - Status: ${lastStatus}`);
 
               if (status.status === 'COMPLETED' && status.generated?.length > 0) {
                 result = status;
+                console.log(`[seedream_generate] Success! Image URL: ${status.generated[0].url}`);
                 break;
               }
-              if (status.status === 'FAILED') {
-                throw new Error('Generation failed');
+              if (status.status === 'FAILED' || status.status === 'ERROR') {
+                console.log(`[seedream_generate] Failed: ${JSON.stringify(status)}`);
+                throw new Error(`Generation failed: ${status.error || status.message || 'Unknown error'}`);
               }
             }
 
@@ -208,12 +216,13 @@ const httpServer = createHttpServer(async (req, res) => {
                 }
               }));
             } else {
+              console.log(`[seedream_generate] Timeout - last status was: ${lastStatus}`);
               res.writeHead(200, { 'Content-Type': 'application/json' });
               res.end(JSON.stringify({
                 jsonrpc: '2.0',
                 id: message.id,
                 result: {
-                  content: [{ type: 'text', text: 'Timeout: Image generation took too long' }],
+                  content: [{ type: 'text', text: `Timeout after 90 seconds. Last status: ${lastStatus}. Task ID: ${data.task_id}\n\nYou can try checking the status later or try again.` }],
                   isError: true
                 }
               }));
