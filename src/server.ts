@@ -186,8 +186,7 @@ const httpServer = createHttpServer(async (req, res) => {
                 id: message.id,
                 result: {
                   content: [
-                    { type: 'text', text: `Image générée avec succès !\n\nURL: ${imageUrl}` },
-                    { type: 'image', data: imageUrl, mimeType: 'image/png' }
+                    { type: 'text', text: `Image generated successfully!\n\nURL: ${imageUrl}\n\nYou can view or download this image directly from the URL above.` }
                   ]
                 }
               }));
