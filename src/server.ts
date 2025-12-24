@@ -12,7 +12,7 @@ if (!API_KEY) {
 }
 
 // Create the MCP server with config
-const mcpServer = createMcpServer({ freepikApiKey: API_KEY });
+const mcpServer = createMcpServer({ config: { freepikApiKey: API_KEY } });
 
 // Store active transports
 const transports = new Map<string, SSEServerTransport>();
