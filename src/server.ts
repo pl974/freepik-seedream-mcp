@@ -42,11 +42,21 @@ const httpServer = createHttpServer(async (req, res) => {
       // Get config from query
       let apiKey = process.env.FREEPIK_API_KEY || '';
       const configParam = url.searchParams.get('config');
+      console.log(`[MCP] Config param present: ${configParam ? 'YES' : 'NO'}`);
       if (configParam) {
         try {
           const decoded = JSON.parse(Buffer.from(configParam, 'base64').toString('utf-8'));
-          if (decoded.freepikApiKey) apiKey = decoded.freepikApiKey;
-        } catch (e) {}
+          console.log(`[MCP] Decoded config keys: ${Object.keys(decoded).join(', ')}`);
+          if (decoded.freepikApiKey) {
+            apiKey = decoded.freepikApiKey;
+            console.log(`[MCP] API key loaded from config (length: ${apiKey.length})`);
+          }
+        } catch (e) {
+          console.log(`[MCP] Failed to decode config: ${e}`);
+        }
+      }
+      if (!apiKey) {
+        console.log('[MCP] WARNING: No API key available from env or config');
       }
 
       // Handle initialize
@@ -116,13 +126,17 @@ const httpServer = createHttpServer(async (req, res) => {
         const toolName = message.params?.name;
         const args = message.params?.arguments || {};
 
+        console.log(`[tools/call] Tool: ${toolName}, Args: ${JSON.stringify(args)}`);
+        console.log(`[tools/call] API Key present: ${apiKey ? 'YES (length: ' + apiKey.length + ')' : 'NO'}`);
+
         if (!apiKey) {
+          console.log('[tools/call] ERROR: No API key configured');
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({
             jsonrpc: '2.0',
             id: message.id,
             result: {
-              content: [{ type: 'text', text: 'Error: No Freepik API key configured' }],
+              content: [{ type: 'text', text: 'Error: No Freepik API key configured. Please add your API key in the MCP configuration.' }],
               isError: true
             }
           }));
@@ -131,6 +145,7 @@ const httpServer = createHttpServer(async (req, res) => {
 
         if (toolName === 'seedream_generate') {
           try {
+            console.log(`[seedream_generate] Starting with prompt: ${args.prompt}`);
             // Start generation
             const response = await fetch('https://api.freepik.com/v1/ai/text-to-image/seedream-v4', {
               method: 'POST',
@@ -144,7 +159,9 @@ const httpServer = createHttpServer(async (req, res) => {
               })
             });
 
+            console.log(`[seedream_generate] API response status: ${response.status}`);
             const data = await response.json();
+            console.log(`[seedream_generate] API response: ${JSON.stringify(data)}`);
 
             if (!data.task_id) {
               res.writeHead(200, { 'Content-Type': 'application/json' });
