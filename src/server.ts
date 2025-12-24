@@ -1,19 +1,18 @@
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
-import { createServer as createHttpServer, IncomingMessage, ServerResponse } from 'http';
-import createMcpServer from './index.js';
+import { Server } from '@modelcontextprotocol/sdk/server/index.js';
+import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import {
+  CallToolRequestSchema,
+  ListToolsRequestSchema,
+} from '@modelcontextprotocol/sdk/types.js';
+import { createServer as createHttpServer } from 'http';
 
 const PORT = parseInt(process.env.PORT || '3000', 10);
 
-// Store active transports by session ID
-const transports = new Map<string, StreamableHTTPServerTransport>();
-
-const httpServer = createHttpServer(async (req: IncomingMessage, res: ServerResponse) => {
-  // CORS headers
+// Simple HTTP wrapper that responds to MCP protocol
+const httpServer = createHttpServer(async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Accept, Mcp-Session-Id');
-  res.setHeader('Access-Control-Expose-Headers', 'Mcp-Session-Id');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', '*');
 
   if (req.method === 'OPTIONS') {
     res.writeHead(204);
@@ -24,163 +23,214 @@ const httpServer = createHttpServer(async (req: IncomingMessage, res: ServerResp
   const url = new URL(req.url || '/', `http://localhost:${PORT}`);
 
   // Health check
-  if ((url.pathname === '/' || url.pathname === '/health') && req.method === 'GET') {
+  if (url.pathname === '/' || url.pathname === '/health') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({
-      status: 'ok',
-      service: 'freepik-seedream-mcp',
-      version: '1.0.0',
-      mcp: '/mcp'
-    }));
+    res.end(JSON.stringify({ status: 'ok', service: 'freepik-seedream-mcp' }));
     return;
   }
 
   // MCP endpoint
-  if (url.pathname === '/mcp') {
-    // Get session ID from header
-    const sessionId = req.headers['mcp-session-id'] as string | undefined;
-
-    // Handle DELETE for session cleanup
-    if (req.method === 'DELETE') {
-      if (sessionId && transports.has(sessionId)) {
-        const transport = transports.get(sessionId)!;
-        await transport.close();
-        transports.delete(sessionId);
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ success: true }));
-      } else {
-        res.writeHead(404, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Session not found' }));
-      }
-      return;
+  if (url.pathname === '/mcp' && req.method === 'POST') {
+    let body = '';
+    for await (const chunk of req) {
+      body += chunk;
     }
 
-    // Handle POST for MCP messages
-    if (req.method === 'POST') {
-      try {
-        // Read body
-        let body = '';
-        for await (const chunk of req) {
-          body += chunk;
-        }
+    try {
+      const message = JSON.parse(body);
 
-        const message = JSON.parse(body);
-        console.log('Received MCP message:', JSON.stringify(message, null, 2));
+      // Get config from query
+      let apiKey = process.env.FREEPIK_API_KEY || '';
+      const configParam = url.searchParams.get('config');
+      if (configParam) {
+        try {
+          const decoded = JSON.parse(Buffer.from(configParam, 'base64').toString('utf-8'));
+          if (decoded.freepikApiKey) apiKey = decoded.freepikApiKey;
+        } catch (e) {}
+      }
 
-        // Check if this is an initialize request (new session)
-        const isInitialize = message.method === 'initialize';
-
-        let transport: StreamableHTTPServerTransport;
-
-        if (isInitialize) {
-          // Use environment variable for API key (set in Smithery)
-          const apiKey = process.env.FREEPIK_API_KEY || '';
-
-          // Also check query parameter as fallback
-          let config = { freepikApiKey: apiKey };
-          const configParam = url.searchParams.get('config');
-          if (configParam) {
-            try {
-              const decoded = JSON.parse(Buffer.from(configParam, 'base64').toString('utf-8'));
-              if (decoded.freepikApiKey) {
-                config.freepikApiKey = decoded.freepikApiKey;
-              }
-            } catch (e) {
-              console.error('Failed to parse config:', e);
+      // Handle initialize
+      if (message.method === 'initialize') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          jsonrpc: '2.0',
+          id: message.id,
+          result: {
+            protocolVersion: '2024-11-05',
+            capabilities: {
+              tools: {}
+            },
+            serverInfo: {
+              name: 'freepik-seedream-mcp',
+              version: '1.0.0'
             }
           }
+        }));
+        return;
+      }
 
-          if (!config.freepikApiKey) {
-            console.error('No FREEPIK_API_KEY found in env or config');
-            res.writeHead(400, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({
-              jsonrpc: '2.0',
-              id: message.id,
-              error: {
-                code: -32602,
-                message: 'Missing FREEPIK_API_KEY environment variable'
+      // Handle tools/list
+      if (message.method === 'tools/list') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          jsonrpc: '2.0',
+          id: message.id,
+          result: {
+            tools: [
+              {
+                name: 'seedream_generate',
+                description: 'Generate an image using Seedream 4.0',
+                inputSchema: {
+                  type: 'object',
+                  properties: {
+                    prompt: { type: 'string', description: 'Image description' },
+                    aspect_ratio: {
+                      type: 'string',
+                      enum: ['square_1_1', 'widescreen_16_9', 'portrait_9_16'],
+                      default: 'square_1_1'
+                    }
+                  },
+                  required: ['prompt']
+                }
+              },
+              {
+                name: 'search_resources',
+                description: 'Search Freepik stock resources',
+                inputSchema: {
+                  type: 'object',
+                  properties: {
+                    term: { type: 'string', description: 'Search term' },
+                    limit: { type: 'number', default: 10 }
+                  },
+                  required: ['term']
+                }
               }
-            }));
-            return;
+            ]
           }
+        }));
+        return;
+      }
 
-          console.log('Using API key:', config.freepikApiKey.substring(0, 8) + '...');
+      // Handle tools/call
+      if (message.method === 'tools/call') {
+        const toolName = message.params?.name;
+        const args = message.params?.arguments || {};
 
-          // Create new transport and server
-          transport = new StreamableHTTPServerTransport({
-            sessionIdGenerator: () => crypto.randomUUID(),
-          });
-
-          // Create MCP server with config
-          const mcpServer = createMcpServer({ config });
-
-          // Connect transport to server
-          await mcpServer.connect(transport);
-
-          // Store transport for future messages
-          const newSessionId = transport.sessionId;
-          if (newSessionId) {
-            transports.set(newSessionId, transport);
-          }
-
-          console.log('New session created:', newSessionId);
-
-        } else if (sessionId && transports.has(sessionId)) {
-          // Use existing transport
-          transport = transports.get(sessionId)!;
-        } else {
-          res.writeHead(400, { 'Content-Type': 'application/json' });
+        if (!apiKey) {
+          res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({
             jsonrpc: '2.0',
             id: message.id,
-            error: {
-              code: -32600,
-              message: 'Invalid or missing session ID'
+            result: {
+              content: [{ type: 'text', text: 'Error: No Freepik API key configured' }],
+              isError: true
             }
           }));
           return;
         }
 
-        // Handle the message through transport
-        await transport.handleRequest(req, res, body);
+        if (toolName === 'seedream_generate') {
+          try {
+            const response = await fetch('https://api.freepik.com/v1/ai/text-to-image/seedream-v4', {
+              method: 'POST',
+              headers: {
+                'x-freepik-api-key': apiKey,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                prompt: args.prompt,
+                aspect_ratio: args.aspect_ratio || 'square_1_1'
+              })
+            });
 
-      } catch (error) {
-        console.error('MCP Error:', error);
-        if (!res.headersSent) {
-          res.writeHead(500, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({
-            jsonrpc: '2.0',
-            id: null,
-            error: {
-              code: -32603,
-              message: error instanceof Error ? error.message : 'Internal error'
-            }
-          }));
+            const data = await response.json();
+
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+              jsonrpc: '2.0',
+              id: message.id,
+              result: {
+                content: [{ type: 'text', text: JSON.stringify(data, null, 2) }]
+              }
+            }));
+          } catch (error) {
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+              jsonrpc: '2.0',
+              id: message.id,
+              result: {
+                content: [{ type: 'text', text: `Error: ${error}` }],
+                isError: true
+              }
+            }));
+          }
+          return;
         }
-      }
-      return;
-    }
 
-    // Handle GET for SSE stream
-    if (req.method === 'GET') {
-      if (sessionId && transports.has(sessionId)) {
-        const transport = transports.get(sessionId)!;
-        await transport.handleRequest(req, res);
-      } else {
-        res.writeHead(400, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Session ID required for SSE' }));
+        if (toolName === 'search_resources') {
+          try {
+            const params = new URLSearchParams({
+              term: args.term,
+              limit: String(args.limit || 10)
+            });
+
+            const response = await fetch(`https://api.freepik.com/v1/resources?${params}`, {
+              headers: { 'x-freepik-api-key': apiKey }
+            });
+
+            const data = await response.json();
+
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+              jsonrpc: '2.0',
+              id: message.id,
+              result: {
+                content: [{ type: 'text', text: JSON.stringify(data, null, 2) }]
+              }
+            }));
+          } catch (error) {
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+              jsonrpc: '2.0',
+              id: message.id,
+              result: {
+                content: [{ type: 'text', text: `Error: ${error}` }],
+                isError: true
+              }
+            }));
+          }
+          return;
+        }
+
+        // Unknown tool
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          jsonrpc: '2.0',
+          id: message.id,
+          error: { code: -32601, message: `Unknown tool: ${toolName}` }
+        }));
+        return;
       }
-      return;
+
+      // Unknown method
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({
+        jsonrpc: '2.0',
+        id: message.id,
+        error: { code: -32601, message: `Unknown method: ${message.method}` }
+      }));
+
+    } catch (error) {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: String(error) }));
     }
+    return;
   }
 
-  // 404
-  res.writeHead(404, { 'Content-Type': 'application/json' });
-  res.end(JSON.stringify({ error: 'Not found' }));
+  res.writeHead(404);
+  res.end('Not found');
 });
 
 httpServer.listen(PORT, () => {
-  console.log(`Freepik Seedream MCP server running on port ${PORT}`);
-  console.log(`MCP endpoint: http://localhost:${PORT}/mcp`);
-  console.log(`Health check: http://localhost:${PORT}/health`);
+  console.log(`Server running on port ${PORT}`);
 });
