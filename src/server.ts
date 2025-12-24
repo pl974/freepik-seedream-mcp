@@ -160,16 +160,20 @@ const httpServer = createHttpServer(async (req, res) => {
             });
 
             console.log(`[seedream_generate] API response status: ${response.status}`);
-            const data = await response.json();
-            console.log(`[seedream_generate] API response: ${JSON.stringify(data)}`);
+            const responseData = await response.json();
+            console.log(`[seedream_generate] API response: ${JSON.stringify(responseData)}`);
 
-            if (!data.task_id) {
+            // Handle nested data structure: {data: {task_id: ...}}
+            const taskData = responseData.data || responseData;
+            const taskId = taskData.task_id;
+
+            if (!taskId) {
               res.writeHead(200, { 'Content-Type': 'application/json' });
               res.end(JSON.stringify({
                 jsonrpc: '2.0',
                 id: message.id,
                 result: {
-                  content: [{ type: 'text', text: `Error: ${JSON.stringify(data)}` }],
+                  content: [{ type: 'text', text: `Error: No task_id in response: ${JSON.stringify(responseData)}` }],
                   isError: true
                 }
               }));
@@ -179,27 +183,29 @@ const httpServer = createHttpServer(async (req, res) => {
             // Poll for completion (max 90 seconds)
             let result = null;
             let lastStatus = 'UNKNOWN';
-            console.log(`[seedream_generate] Starting polling for task ${data.task_id}`);
+            console.log(`[seedream_generate] Starting polling for task ${taskId}`);
 
             for (let i = 0; i < 45; i++) {
               await new Promise(r => setTimeout(r, 2000));
 
-              const statusRes = await fetch(`https://api.freepik.com/v1/ai/text-to-image/seedream/${data.task_id}`, {
+              const statusRes = await fetch(`https://api.freepik.com/v1/ai/text-to-image/seedream/${taskId}`, {
                 headers: { 'x-freepik-api-key': apiKey }
               });
-              const status = await statusRes.json();
-              lastStatus = status.status || 'UNKNOWN';
+              const statusResponse = await statusRes.json();
+              // Handle nested data structure
+              const statusData = statusResponse.data || statusResponse;
+              lastStatus = statusData.status || 'UNKNOWN';
 
               console.log(`[seedream_generate] Poll ${i+1}/45 - Status: ${lastStatus}`);
 
-              if (status.status === 'COMPLETED' && status.generated?.length > 0) {
-                result = status;
-                console.log(`[seedream_generate] Success! Image URL: ${status.generated[0].url}`);
+              if (statusData.status === 'COMPLETED' && statusData.generated?.length > 0) {
+                result = statusData;
+                console.log(`[seedream_generate] Success! Image URL: ${statusData.generated[0].url}`);
                 break;
               }
-              if (status.status === 'FAILED' || status.status === 'ERROR') {
-                console.log(`[seedream_generate] Failed: ${JSON.stringify(status)}`);
-                throw new Error(`Generation failed: ${status.error || status.message || 'Unknown error'}`);
+              if (statusData.status === 'FAILED' || statusData.status === 'ERROR') {
+                console.log(`[seedream_generate] Failed: ${JSON.stringify(statusData)}`);
+                throw new Error(`Generation failed: ${statusData.error || statusData.message || 'Unknown error'}`);
               }
             }
 
@@ -222,7 +228,7 @@ const httpServer = createHttpServer(async (req, res) => {
                 jsonrpc: '2.0',
                 id: message.id,
                 result: {
-                  content: [{ type: 'text', text: `Timeout after 90 seconds. Last status: ${lastStatus}. Task ID: ${data.task_id}\n\nYou can try checking the status later or try again.` }],
+                  content: [{ type: 'text', text: `Timeout after 90 seconds. Last status: ${lastStatus}. Task ID: ${taskId}\n\nYou can try checking the status later or try again.` }],
                   isError: true
                 }
               }));
