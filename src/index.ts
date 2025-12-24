@@ -1,16 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { FreepikClient } from './api/client.js';
-import {
-  SearchResourcesSchema,
-  GetResourceSchema,
-  DownloadResourceSchema,
-  GenerateImageSchema,
-  CheckStatusSchema,
-  SeedreamTextToImageSchema,
-  SeedreamEditSchema,
-  SeedreamStatusSchema,
-} from './types.js';
 
 // ============================================
 // Configuration Schema for Smithery
@@ -22,12 +12,10 @@ export const configSchema = z.object({
     .describe('Your Freepik API Key (get it from freepik.com/api)'),
 });
 
-type Config = z.infer<typeof configSchema>;
-
 // ============================================
-// Main Server Factory (exported for Smithery)
+// Main Server Factory (Smithery format)
 // ============================================
-export default function createServer(config: Config) {
+export default function createServer({ config }: { config: z.infer<typeof configSchema> }) {
   const server = new McpServer({
     name: 'freepik-seedream-mcp',
     version: '1.0.0',
@@ -81,7 +69,7 @@ export default function createServer(config: Config) {
           return {
             content: [
               {
-                type: 'text',
+                type: 'text' as const,
                 text: JSON.stringify(
                   {
                     task_id: result.task_id,
@@ -97,7 +85,6 @@ export default function createServer(config: Config) {
           };
         }
 
-        // Wait for completion
         const completed = await client.waitForCompletion(
           result.task_id,
           'seedream'
@@ -107,13 +94,8 @@ export default function createServer(config: Config) {
           return {
             content: [
               {
-                type: 'text',
+                type: 'text' as const,
                 text: `Image generated successfully!\n\nURL: ${completed.generated[0].url}`,
-              },
-              {
-                type: 'image',
-                data: completed.generated[0].url,
-                mimeType: completed.generated[0].content_type || 'image/png',
               },
             ],
           };
@@ -122,7 +104,7 @@ export default function createServer(config: Config) {
         return {
           content: [
             {
-              type: 'text',
+              type: 'text' as const,
               text: JSON.stringify(completed, null, 2),
             },
           ],
@@ -131,7 +113,7 @@ export default function createServer(config: Config) {
         return {
           content: [
             {
-              type: 'text',
+              type: 'text' as const,
               text: `Error: ${error instanceof Error ? error.message : String(error)}`,
             },
           ],
@@ -175,7 +157,7 @@ export default function createServer(config: Config) {
           return {
             content: [
               {
-                type: 'text',
+                type: 'text' as const,
                 text: JSON.stringify(
                   {
                     task_id: result.task_id,
@@ -200,13 +182,8 @@ export default function createServer(config: Config) {
           return {
             content: [
               {
-                type: 'text',
+                type: 'text' as const,
                 text: `Image edited successfully!\n\nURL: ${completed.generated[0].url}`,
-              },
-              {
-                type: 'image',
-                data: completed.generated[0].url,
-                mimeType: completed.generated[0].content_type || 'image/png',
               },
             ],
           };
@@ -215,7 +192,7 @@ export default function createServer(config: Config) {
         return {
           content: [
             {
-              type: 'text',
+              type: 'text' as const,
               text: JSON.stringify(completed, null, 2),
             },
           ],
@@ -224,7 +201,7 @@ export default function createServer(config: Config) {
         return {
           content: [
             {
-              type: 'text',
+              type: 'text' as const,
               text: `Error: ${error instanceof Error ? error.message : String(error)}`,
             },
           ],
@@ -259,13 +236,8 @@ export default function createServer(config: Config) {
           return {
             content: [
               {
-                type: 'text',
+                type: 'text' as const,
                 text: `Status: COMPLETED\n\nImage URL: ${result.generated[0].url}`,
-              },
-              {
-                type: 'image',
-                data: result.generated[0].url,
-                mimeType: result.generated[0].content_type || 'image/png',
               },
             ],
           };
@@ -274,7 +246,7 @@ export default function createServer(config: Config) {
         return {
           content: [
             {
-              type: 'text',
+              type: 'text' as const,
               text: JSON.stringify(result, null, 2),
             },
           ],
@@ -283,7 +255,7 @@ export default function createServer(config: Config) {
         return {
           content: [
             {
-              type: 'text',
+              type: 'text' as const,
               text: `Error: ${error instanceof Error ? error.message : String(error)}`,
             },
           ],
@@ -349,7 +321,7 @@ export default function createServer(config: Config) {
         return {
           content: [
             {
-              type: 'text',
+              type: 'text' as const,
               text: `Found ${result.meta.pagination.total} results for "${term}"\n\nTop ${summary.length} results:\n${JSON.stringify(summary, null, 2)}`,
             },
           ],
@@ -358,7 +330,7 @@ export default function createServer(config: Config) {
         return {
           content: [
             {
-              type: 'text',
+              type: 'text' as const,
               text: `Error: ${error instanceof Error ? error.message : String(error)}`,
             },
           ],
@@ -384,7 +356,7 @@ export default function createServer(config: Config) {
         return {
           content: [
             {
-              type: 'text',
+              type: 'text' as const,
               text: JSON.stringify(result, null, 2),
             },
           ],
@@ -393,7 +365,7 @@ export default function createServer(config: Config) {
         return {
           content: [
             {
-              type: 'text',
+              type: 'text' as const,
               text: `Error: ${error instanceof Error ? error.message : String(error)}`,
             },
           ],
@@ -419,7 +391,7 @@ export default function createServer(config: Config) {
         return {
           content: [
             {
-              type: 'text',
+              type: 'text' as const,
               text: `Download URL: ${result.url}`,
             },
           ],
@@ -428,7 +400,7 @@ export default function createServer(config: Config) {
         return {
           content: [
             {
-              type: 'text',
+              type: 'text' as const,
               text: `Error: ${error instanceof Error ? error.message : String(error)}`,
             },
           ],
@@ -486,7 +458,7 @@ export default function createServer(config: Config) {
           return {
             content: [
               {
-                type: 'text',
+                type: 'text' as const,
                 text: JSON.stringify(result, null, 2),
               },
             ],
@@ -501,7 +473,7 @@ export default function createServer(config: Config) {
         return {
           content: [
             {
-              type: 'text',
+              type: 'text' as const,
               text: JSON.stringify(completed, null, 2),
             },
           ],
@@ -510,7 +482,7 @@ export default function createServer(config: Config) {
         return {
           content: [
             {
-              type: 'text',
+              type: 'text' as const,
               text: `Error: ${error instanceof Error ? error.message : String(error)}`,
             },
           ],
@@ -520,5 +492,6 @@ export default function createServer(config: Config) {
     }
   );
 
-  return server;
+  // Return the underlying server for Smithery
+  return server.server;
 }

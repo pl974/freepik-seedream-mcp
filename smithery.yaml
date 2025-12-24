@@ -1,1 +1,2 @@
 runtime: "typescript"
+target: ".smithery/index.cjs"
