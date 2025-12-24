@@ -2,6 +2,16 @@ runtime: "container"
 
 startCommand:
   type: "http"
+  configSchema:
+    type: "object"
+    required:
+      - "freepikApiKey"
+    properties:
+      freepikApiKey:
+        type: "string"
+        description: "Your Freepik API Key (get it from freepik.com/api)"
+  exampleConfig:
+    freepikApiKey: "fpk_example_key_123"
 
 build:
   dockerfile: "Dockerfile"
@@ -9,4 +19,3 @@ build:
 
 env:
   NODE_ENV: "production"
-  FREEPIK_API_KEY: "${FREEPIK_API_KEY}"
