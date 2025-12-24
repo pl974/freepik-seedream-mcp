@@ -200,7 +200,8 @@ const httpServer = createHttpServer(async (req, res) => {
 
               if (statusData.status === 'COMPLETED' && statusData.generated?.length > 0) {
                 result = statusData;
-                console.log(`[seedream_generate] Success! Image URL: ${statusData.generated[0].url}`);
+                const firstGen = statusData.generated[0];
+                console.log(`[seedream_generate] Success! Full generated object: ${JSON.stringify(firstGen)}`);
                 break;
               }
               if (statusData.status === 'FAILED' || statusData.status === 'ERROR') {
@@ -210,14 +211,24 @@ const httpServer = createHttpServer(async (req, res) => {
             }
 
             if (result && result.generated?.length > 0) {
-              const imageUrl = result.generated[0].url;
+              const firstGen = result.generated[0];
+              // Try multiple possible paths for the image URL
+              const imageUrl = firstGen.url || firstGen.image || firstGen.uri || firstGen.src ||
+                               (typeof firstGen === 'string' ? firstGen : null);
+
+              console.log(`[seedream_generate] Extracted URL: ${imageUrl}`);
+              console.log(`[seedream_generate] Full first generated: ${JSON.stringify(firstGen)}`);
+
               res.writeHead(200, { 'Content-Type': 'application/json' });
               res.end(JSON.stringify({
                 jsonrpc: '2.0',
                 id: message.id,
                 result: {
                   content: [
-                    { type: 'text', text: `Image generated successfully!\n\nURL: ${imageUrl}\n\nYou can view or download this image directly from the URL above.` }
+                    { type: 'text', text: imageUrl
+                      ? `Image generated successfully!\n\nURL: ${imageUrl}\n\nYou can view or download this image directly from the URL above.`
+                      : `Image generated but URL format unknown. Raw data:\n\n${JSON.stringify(firstGen, null, 2)}`
+                    }
                   ]
                 }
               }));
