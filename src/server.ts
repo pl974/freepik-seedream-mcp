@@ -147,7 +147,7 @@ const httpServer = createHttpServer(async (req, res) => {
           try {
             console.log(`[seedream_generate] Starting with prompt: ${args.prompt}`);
             // Start generation
-            const response = await fetch('https://api.freepik.com/v1/ai/text-to-image/seedream', {
+            const response = await fetch('https://api.freepik.com/v1/ai/text-to-image/seedream-v4', {
               method: 'POST',
               headers: {
                 'x-freepik-api-key': apiKey,
@@ -188,7 +188,7 @@ const httpServer = createHttpServer(async (req, res) => {
             for (let i = 0; i < 45; i++) {
               await new Promise(r => setTimeout(r, 2000));
 
-              const statusRes = await fetch(`https://api.freepik.com/v1/ai/text-to-image/seedream/${taskId}`, {
+              const statusRes = await fetch(`https://api.freepik.com/v1/ai/text-to-image/seedream-v4/${taskId}`, {
                 headers: { 'x-freepik-api-key': apiKey }
               });
               const statusResponse = await statusRes.json();
@@ -212,9 +212,10 @@ const httpServer = createHttpServer(async (req, res) => {
 
             if (result && result.generated?.length > 0) {
               const firstGen = result.generated[0];
-              // Try multiple possible paths for the image URL
-              const imageUrl = firstGen.url || firstGen.image || firstGen.uri || firstGen.src ||
-                               (typeof firstGen === 'string' ? firstGen : null);
+              // Seedream v4 API returns: generated as array of strings (URLs) or objects with .url
+              const imageUrl = typeof firstGen === 'string'
+                ? firstGen
+                : (firstGen.url || firstGen.image || firstGen.uri || firstGen.src || null);
 
               console.log(`[seedream_generate] Extracted URL: ${imageUrl}`);
               console.log(`[seedream_generate] Full first generated: ${JSON.stringify(firstGen)}`);
