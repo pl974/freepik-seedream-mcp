@@ -1,5 +1,7 @@
 # Freepik Seedream MCP Server
 
+[![smithery badge](https://smithery.ai/badge/thib/freepik-seedream-mcp)](https://smithery.ai/server/thib/freepik-seedream-mcp)
+
 MCP server for Freepik API with **Seedream 4.0** support, optimized for Smithery deployment.
 
 ## Features
