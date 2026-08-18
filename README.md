@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/pl974-freepik-seedream-mcp-badge.png)](https://mseep.ai/app/pl974-freepik-seedream-mcp)
+
 # Freepik Seedream MCP Server
 
 MCP server for Freepik API with **Seedream 4.0** support, optimized for Smithery deployment.
